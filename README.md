@@ -39,12 +39,14 @@ A flutter/dart based application for modules of DevSoc(AppDev Vertical)
 ## ADDED EXTRAS
 
 History Screen: Show a history of past wagers, dice rolls, and outcomes.
+
 Custom UI: Design a custom layout with images of dice and a creative interface.
 
 
 ## FUTURE POSSIBLE IMPLEMENTATIONS
 
 Dice Animation: Adding animations when rolling the dice.
+
 Sound Effects: Playing a sound when the dice are rolled.
 
     Leaderboards:
