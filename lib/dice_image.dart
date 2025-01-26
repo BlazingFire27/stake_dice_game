@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class DiceImage extends StatelessWidget {
   final int diceValue;
 
-  DiceImage({required this.diceValue});
+  const DiceImage({super.key, required this.diceValue});
 
   @override
   Widget build(BuildContext context) {
@@ -15,10 +15,10 @@ class DiceImage extends StatelessWidget {
           width: 50,
           height: 50,
         ),
-        SizedBox(height: 5),
+        const SizedBox(height: 5),
         Text(
           '$diceValue',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,

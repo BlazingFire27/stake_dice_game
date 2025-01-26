@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "422848075946",
+    "project_id": "stake-dice-game",
+    "storage_bucket": "stake-dice-game.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:422848075946:android:9a7366ed02b39940f958d3",
+        "android_client_info": {
+          "package_name": "com.master.stake_dice_game"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYJ_hK9WEBC9kPP7HaV0SamJhw7ZfTm0A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

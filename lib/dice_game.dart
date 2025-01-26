@@ -3,55 +3,116 @@ import 'dart:math';
 import 'dice_image.dart';
 import 'game_result.dart';
 import 'history_list.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'login_screen.dart';
 
 class DiceGame extends StatefulWidget {
+  const DiceGame({super.key});
+
   @override
   _DiceGameState createState() => _DiceGameState();
 }
 
 class _DiceGameState extends State<DiceGame> with SingleTickerProviderStateMixin {
-  int walletBalance = 10;
+  int walletBalance = 10; // Default wallet balance, will update after fetching from Firebase
   TextEditingController wagerController = TextEditingController();
   int wager = 0;
   int gameType = 2; // Default to "2 Alike"
-  List<int> diceRolls = [1, 1, 1, 1]; // List for displaying dice values
-  List<int> finalDiceRolls = [1, 1, 1, 1]; // Store final dice rolls used for win/loss check
+  List<int> diceRolls = [1, 1, 1, 1];
+  List<int> finalDiceRolls = [1, 1, 1, 1];
   late AnimationController _animationController;
-  String gameResult = ''; // To display win/lose message
-  List<String> history = []; // List to store the history of results (win/lose and coin changes)
+  String gameResult = '';
+  List<String> history = [];
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: Duration(seconds: 1),
-    );
+    _animationController = AnimationController(vsync: this, duration: const Duration(seconds: 1));
+    _fetchWalletBalance(); // Fetch wallet balance when the game starts
+    _fetchHistory(); // Fetch game history when the game starts
   }
 
-  // Function to roll 4 dice (final values)
   List<int> rollDice() {
     Random random = Random();
     return List.generate(4, (_) => random.nextInt(6) + 1);
   }
 
-  // Function to handle the 'Go' button press
+  // Fetch wallet balance from Firebase
+  Future<void> _fetchWalletBalance() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        // Fetch the document of the current user
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (userDoc.exists) {
+          setState(() {
+            walletBalance = userDoc['walletBalance'] ?? 10; // Default to 10 if not found
+          });
+          print("Fetched wallet balance: $walletBalance");
+        }
+      } catch (e) {
+        print("Error fetching wallet balance: $e");
+      }
+    }
+  }
+
+  // Fetch game history from Firebase
+  Future<void> _fetchHistory() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        QuerySnapshot historySnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('gameHistory')
+            .orderBy('timestamp', descending: true)
+            .get();
+        setState(() {
+          history = historySnapshot.docs.map((doc) => doc['result'] as String).toList();
+        });
+      } catch (e) {
+        print("Error fetching game history: $e");
+      }
+    }
+  }
+
+  // Update wallet balance in Firebase using `set` to ensure it's updated correctly
+  Future<void> _updateWalletBalance(int updatedBalance) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        DocumentReference userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+
+        // Use 'set' to ensure that the walletBalance is updated properly
+        await userDocRef.set({'walletBalance': updatedBalance}, SetOptions(merge: true));
+
+        // Fetch updated balance to reflect on the app
+        await _fetchWalletBalance();
+        print("Wallet balance updated to: $updatedBalance");
+      } catch (e) {
+        print("Error updating wallet balance: $e");
+      }
+    }
+  }
+
+  Future<void> _saveGameHistory(String result) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('gameHistory').add({
+          'result': result,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        print("Error saving game history: $e");
+      }
+    }
+  }
+
   void onGoPressed() {
     wager = int.tryParse(wagerController.text) ?? 0;
-
-    // Check if wager is valid based on game type and wallet balance
-    int maxWager = 0;
-    switch (gameType) {
-      case 2:
-        maxWager = walletBalance ~/ 2; // Maximum wager for "2 Alike" = Balance ÷ 2
-        break;
-      case 3:
-        maxWager = walletBalance ~/ 3; // Maximum wager for "3 Alike" = Balance ÷ 3
-        break;
-      case 4:
-        maxWager = walletBalance ~/ 4; // Maximum wager for "4 Alike" = Balance ÷ 4
-        break;
-    }
+    int maxWager = walletBalance ~/ 2;
 
     if (wager <= 0 || wager > walletBalance) {
       setState(() {
@@ -62,26 +123,22 @@ class _DiceGameState extends State<DiceGame> with SingleTickerProviderStateMixin
 
     if (wager > maxWager) {
       setState(() {
-        gameResult = 'Invalid wager! Maximum wager for this game type is $maxWager coins.';
+        gameResult = 'Wager exceeds the maximum allowed wager of $maxWager coins.';
       });
       return;
     }
 
-    // Generate the final dice rolls before starting the animation
-    finalDiceRolls = rollDice(); // Store final dice rolls
-    diceRolls = List.generate(4, (_) => Random().nextInt(6) + 1); // Initial random dice rolls for animation
-
-    // Start the dice rolling animation
+    finalDiceRolls = rollDice();
+    diceRolls = List.generate(4, (_) => Random().nextInt(6) + 1);
     _animationController.forward(from: 0);
 
-    // After animation finishes, evaluate the result
-    Future.delayed(Duration(seconds: 1), () {
+    Future.delayed(const Duration(seconds: 1), () {
       _animationController.stop();
-
       String result = checkWinOrLose(finalDiceRolls, gameType, wager);
-      walletBalance = updateWalletBalance(result, walletBalance); // Update wallet balance
+      walletBalance = updateWalletBalance(result, walletBalance);
+      _updateWalletBalance(walletBalance); // Update Firebase with new balance
+      _saveGameHistory(result); // Save game result to Firebase
 
-      // Store the result in the history list
       setState(() {
         history.insert(0, result);
         gameResult = result;
@@ -91,21 +148,25 @@ class _DiceGameState extends State<DiceGame> with SingleTickerProviderStateMixin
     });
   }
 
+  // Handle logout
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Stake Dice Game',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Stake Dice Game', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.blueGrey,
+        actions: [
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout), // Logout button functionality
+        ],
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -119,27 +180,20 @@ class _DiceGameState extends State<DiceGame> with SingleTickerProviderStateMixin
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text(
-                    'Wallet Balance: $walletBalance coins',
-                    style: TextStyle(fontSize: 24, color: Colors.white),
-                  ),
-                  SizedBox(width: 10),
+                  Text('Wallet Balance: $walletBalance coins', style: const TextStyle(fontSize: 24, color: Colors.white)),
+                  const SizedBox(width: 10),
                   Image.asset('assets/coin.jpg', width: 30, height: 30),
                 ],
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               TextField(
                 controller: wagerController,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Enter wager',
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
+                decoration: const InputDecoration(labelText: 'Enter wager', filled: true, fillColor: Colors.white),
               ),
               DropdownButton<int>(
                 value: gameType,
-                items: [
+                items: const [
                   DropdownMenuItem(value: 2, child: Text('2 Alike')),
                   DropdownMenuItem(value: 3, child: Text('3 Alike')),
                   DropdownMenuItem(value: 4, child: Text('4 Alike')),
@@ -159,10 +213,7 @@ class _DiceGameState extends State<DiceGame> with SingleTickerProviderStateMixin
                   );
                 }),
               ),
-              ElevatedButton(
-                onPressed: onGoPressed,
-                child: Text('Go'),
-              ),
+              ElevatedButton(onPressed: onGoPressed, child: const Text('Go')),
               Padding(
                 padding: const EdgeInsets.only(top: 20),
                 child: Text(
@@ -174,12 +225,12 @@ class _DiceGameState extends State<DiceGame> with SingleTickerProviderStateMixin
                   ),
                 ),
               ),
-              SizedBox(height: 20),
-              Text(
+              const SizedBox(height: 20),
+              const Text(
                 'History:',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
               ),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               Expanded(child: HistoryList(history: history)),
             ],
           ),

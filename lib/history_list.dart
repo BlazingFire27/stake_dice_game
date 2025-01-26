@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class HistoryList extends StatelessWidget {
   final List<String> history;
 
-  HistoryList({required this.history});
+  const HistoryList({super.key, required this.history});
 
   @override
   Widget build(BuildContext context) {
